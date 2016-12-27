@@ -152,6 +152,10 @@ else if (op == MCMP) { ax = memcmp((char *)sp[2], (char *)sp[1], *sp);}
 
 ### 测试 ###
 ```
+#include <stdio.h>
+#include <stdlib.h>
+#include <memory.h>
+#include <string.h>
 
 int poolsize;         // default size of text/data/stack
 int line;             // line number
@@ -226,6 +230,92 @@ int main(int argc, char *argv[])
 ```
 exit(30)
 ```
+
+## 词法分析器和语法分析器 ##
+
+词法分析器，用于将字符串转化成内部的表示结构。
+语法分析器，将词法分析得到的标记流（token）生成一棵语法树。
+
+1. `next()`: 用于词法分析，获取下一个标记，它将自动忽略空白字符。
+2. `program()`: 语法分析的入口，分析整个 C 语言程序。
+
+### 测试语法分析器的框架 ###
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <memory.h>
+#include <string.h>
+
+int token;            // current token
+char *src, *old_src;  // pointer to source code string;
+int poolsize;         // default size of text/data/stack
+
+void next() {
+    token = *src++;
+    return;
+}
+
+void program() {
+    next();                  // get next token
+    while (token > 0) {
+        printf("token is: %c\n", token);
+        next();
+    }
+}
+
+int main(int argc, char *argv[]) {
+  int i, fd;
+
+  argv++;
+
+  poolsize = 256 * 1024; // arbitrary size
+
+  if ((fd = open(*argv, 0)) < 0) {
+    printf("could not open(%s)\n", *argv);
+    return -1;
+  }
+
+  if (!(src = malloc(poolsize))) {
+    printf("could not malloc(%d) for source area\n", poolsize);
+    return -1;
+  }
+
+  // read the source file
+  if ((i = read(fd, src, poolsize-1)) <= 0) {
+    printf("read() returned %d\n", i);
+    return -1;
+  }
+
+  src[i] = 0; // add EOF character
+  close(fd);
+
+  program();
+}
+```
+编译程序 `gcc -m32 compiler1.c`，运行程序：`./a.out compiler1.c`。(在32位的机器上编译时，不需要加-m32参数)输出
+```
+token is: #
+token is: i
+token is: n
+token is: c
+token is: l
+...
+```
+这里的next()函数，把一个字符当做了一个token，事实上这是不对的。每次调用next()函数，应该从未分析过的字符流中分拆出来一个的token，比如未分析过的字符流是“100+200”这7个字符，第一次调用next()函数时，应该分拆出“单词”100，第二次调用next()函数时，应该分拆出“单词”+，第三次调用next()函数时，应该分拆出“单词”200。那么，next()函数的主体应该是如下这个样子：
+```
+void next() {
+    char *last_pos;
+    int hash;
+    while (token = *src) {
+        ++src;
+        // parse token here
+    }
+    return;
+}
+```
+
+
+
 
 ##### 联系方式 #####
 * 邮箱：victorypiter@msn.com（欢迎大家发邮件跟我交流）
