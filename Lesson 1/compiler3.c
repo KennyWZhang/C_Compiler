@@ -5,7 +5,7 @@
 
 int token;                    // current token
 int token_val;                // value of current token (mainly for number)
-char *src;          // pointer to source code string;
+char *src;                    // pointer to source code string;
 int poolsize;                 // default size of text/data/stack
 char *data;                   // data segment
 int *current_id,              // current parsed ID
@@ -13,9 +13,9 @@ int *current_id,              // current parsed ID
 int *idmain;                  // the `main` function
 
 // instructions
-enum { LEA ,IMM ,JMP ,CALL,JZ  ,JNZ ,ENT ,ADJ ,LEV ,LI  ,LC  ,SI  ,SC  ,PUSH,
-       OR ,XOR ,AND ,EQ  ,NE  ,LT  ,GT  ,LE  ,GE  ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,
-       OPEN,READ,CLOS,PRTF,MALC,MSET,MCMP,EXIT };
+enum { LEA, IMM, JMP, CALL, JZ, JNZ, ENT, ADJ, LEV, LI, LC, SI, SC ,PUSH,
+       OR, XOR, AND, EQ ,NE ,LT ,GT ,LE ,GE ,SHL ,SHR ,ADD ,SUB ,MUL ,DIV ,MOD ,
+       OPEN, READ, CLOS, PRTF, MALC, MSET, MCMP, EXIT};
 
 // tokens and classes (operators last and in precedence order)
 enum {
@@ -38,16 +38,14 @@ void next() {
         ++src;
 
         // parse token here
-        if (token == '\n') {
-            ++line;
-        }
-        else if (token == '#') {
+        if (token == '\n' | token == ' ') {
+            // ++line;
+        } else if (token == '#') {
             // skip macro, because we will not support it
             while (*src != 0 && *src != '\n') {
                 src++;
             }
-        }
-        else if ((token >= 'a' && token <= 'z') || (token >= 'A' && token <= 'Z') || (token == '_')) {
+        } else if ((token >= 'a' && token <= 'z') || (token >= 'A' && token <= 'Z') || (token == '_')) {
 
             // parse identifier
             last_pos = src - 1;
@@ -69,14 +67,12 @@ void next() {
                 current_id = current_id + IdSize;
             }
 
-
             // store new ID
             current_id[Name] = (int)last_pos;
             current_id[Hash] = hash;
             token = current_id[Token] = Id;
             return;
-        }
-        else if (token >= '0' && token <= '9') {
+        } else if (token >= '0' && token <= '9') {
             // parse number, three kinds: dec(123) hex(0x123) oct(017)
             token_val = token - '0';
             if (token_val > 0) {
@@ -103,8 +99,7 @@ void next() {
 
             token = Num;
             return;
-        }
-        else if (token == '"' || token == '\'') {
+        } else if (token == '"' || token == '\'') {
             // parse string literal, currently, the only supported escape
             // character is '\n', store the string literal into data.
             last_pos = data;
@@ -132,8 +127,7 @@ void next() {
             }
 
             return;
-        }
-        else if (token == '/') {
+        } else if (token == '/') {
             if (*src == '/') {
                 // skip comments
                 while (*src != 0 && *src != '\n') {
@@ -144,8 +138,7 @@ void next() {
                 token = Div;
                 return;
             }
-        }
-        else if (token == '=') {
+        } else if (token == '=') {
             // parse '==' and '='
             if (*src == '=') {
                 src ++;
@@ -154,8 +147,7 @@ void next() {
                 token = Assign;
             }
             return;
-        }
-        else if (token == '+') {
+        } else if (token == '+') {
             // parse '+' and '++'
             if (*src == '+') {
                 src ++;
@@ -164,8 +156,7 @@ void next() {
                 token = Add;
             }
             return;
-        }
-        else if (token == '-') {
+        } else if (token == '-') {
             // parse '-' and '--'
             if (*src == '-') {
                 src ++;
@@ -174,8 +165,7 @@ void next() {
                 token = Sub;
             }
             return;
-        }
-        else if (token == '!') {
+        } else if (token == '!') {
             // parse '!='
             if (*src == '=') {
                 src++;
@@ -195,8 +185,7 @@ void next() {
                 token = Lt;
             }
             return;
-        }
-        else if (token == '>') {
+        } else if (token == '>') {
             // parse '>=', '>>' or '>'
             if (*src == '=') {
                 src ++;
@@ -208,8 +197,7 @@ void next() {
                 token = Gt;
             }
             return;
-        }
-        else if (token == '|') {
+        } else if (token == '|') {
             // parse '|' or '||'
             if (*src == '|') {
                 src ++;
@@ -218,8 +206,7 @@ void next() {
                 token = Or;
             }
             return;
-        }
-        else if (token == '&') {
+        } else if (token == '&') {
             // parse '&' and '&&'
             if (*src == '&') {
                 src ++;
@@ -228,28 +215,22 @@ void next() {
                 token = And;
             }
             return;
-        }
-        else if (token == '^') {
+        } else if (token == '^') {
             token = Xor;
             return;
-        }
-        else if (token == '%') {
+        } else if (token == '%') {
             token = Mod;
             return;
-        }
-        else if (token == '*') {
+        } else if (token == '*') {
             token = Mul;
             return;
-        }
-        else if (token == '[') {
+        } else if (token == '[') {
             token = Brak;
             return;
-        }
-        else if (token == '?') {
+        } else if (token == '?') {
             token = Cond;
             return;
-        }
-        else if (token == '~' || token == ';' || token == '{' || token == '}' || token == '(' || token == ')' || token == ']' || token == ',' || token == ':') {
+        } else if (token == '~' || token == ';' || token == '{' || token == '}' || token == '(' || token == ')' || token == ']' || token == ',' || token == ':') {
             // directly return the character as token;
             return;
         }
@@ -272,7 +253,7 @@ int main(int argc, char **argv) {
     argv++;
 
     poolsize = 256 * 1024; // arbitrary size
-    line = 1;
+    // line = 1;
 
     if (!(data = malloc(poolsize))) {
         printf("could not malloc(%d) for data area\n", poolsize);

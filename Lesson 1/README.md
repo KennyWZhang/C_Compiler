@@ -683,6 +683,7 @@ else if (token == '%') {
 }
 else if (token == '*') {
     // ignore '*='
+    // ignore pointer指针
     token = Mul;
     return;
 }
@@ -701,12 +702,136 @@ else if (token == '~' || token == ';' || token == '{' || token == '}' || token =
 ```
 
 #### 测试
-编译程序 `gcc -m32 compiler3.c`，运行程序：`./a.out compiler3.c`。输出：
+编译程序 `gcc -m32 compiler3.c`，运行程序：`./a.out compiler3.c`。（自己编译自己，“自举”）输出：
 ```
-token is: x
-token is: x
-token is: x
+token is: 138
+token is: 133
+token is: 59
+token is: 138
+token is: 133
+token is: 59
+token is: 134
+token is: 159
+token is: 133
+token is: 59
+...
 ```
+Congratulations again!!!改进后的词法分析器已经成功识别了C语言中的绝大部分的Token。
+
+#### 递归下降
+**四则运算的实现**
+消除左递归后的文法如下：
+```
+<expr> ::= <term> <expr_tail>
+<expr_tail> ::= + <term> <expr_tail>
+              | - <term> <expr_tail>
+              | <empty>
+<term> ::= <factor> <term_tail>
+<term_tail> ::= * <factor> <term_tail>
+              | / <factor> <term_tail>
+              | <empty>
+<factor> ::= ( <expr> )
+           | Num
+```
+
+语法分析器：
+```
+int expr();
+int factor() {
+    int value = 0;
+    if (token == '(') {
+        match('(');
+        value = expr();
+        match(')');
+    } else {
+        value = token_val;
+        match(Num);
+    }
+    return value;
+}
+int term_tail(int lvalue) {
+    if (token == '*') {
+        match('*');
+        int value = lvalue * factor();
+        return term_tail(value);
+    } else if (token == '/') {
+        match('/');
+        int value = lvalue / factor();
+        return term_tail(value);
+    } else {
+        return lvalue;
+    }
+}
+int term() {
+    int lvalue = factor();
+    return term_tail(lvalue);
+}
+int expr_tail(int lvalue) {
+    if (token == '+') {
+        match('+');
+        int value = lvalue + term();
+        return expr_tail(value);
+    } else if (token == '-') {
+        match('-');
+        int value = lvalue - term();
+        return expr_tail(value);
+    } else {
+        return lvalue;
+    }
+}
+int expr() {
+    int lvalue = term();
+    return expr_tail(lvalue);
+}
+```
+
+词法分析器：
+```
+#include <stdio.h>
+#include <stdlib.h>
+enum {Num};
+int token;
+int token_val;
+char *line = NULL;
+char *src = NULL;
+void next() {
+    // skip white space
+    while (*src == ' ' || *src == '\t') {
+        src ++;
+    }
+    token = *src++;
+    if (token >= '0' && token <= '9' ) {
+        token_val = token - '0';
+        token = Num;
+        while (*src >= '0' && *src <= '9') {
+            token_val = token_val*10 + *src - '0';
+            src ++;
+        }
+        return;
+    }
+}
+void match(int tk) {
+    if (token != tk) {
+        printf("expected token: %d(%c), got: %d(%c)\n", tk, tk, token, token);
+        exit(-1);
+    }
+    next();
+}
+```
+最后是main函数：
+```
+int main(int argc, char *argv[]) {
+    size_t linecap = 0;
+    ssize_t linelen;
+    while ((linelen = getline(&line, &linecap, stdin)) > 0) {
+        src = line;
+        next();
+        printf("%d\n", expr());
+    }
+    return 0;
+}
+```
+
 
 ###### 联系方式
 * 邮箱：victorypiter@msn.com（欢迎大家发邮件跟我交流）
