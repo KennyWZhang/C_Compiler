@@ -1,6 +1,6 @@
 # 从0到100开发一个C语言编译器（1）- 学习lotabout的系列文章
 
-##### 作者简介 #####
+###### 作者简介
 KennyWZhang，前阿里P6工程师、腾讯T3技术专家（自封的，哈哈），编译器开发爱好者（真的，哈哈哈）。
 
 关于编译器开发入门的文章中，到目前为止，网络上我见过的最好文章，莫过于[lotabout大牛](http://lotabout.me)写的“手把手教你构建 C 语言编译器”系列。（原谅我不知道他的真实姓名，姑且称他做lotabout大牛）lotabout大牛的文章写得精炼明了，可以让一个对《编译原理》不太理解的新手开发出一个简单的C语言子集的编译器原型，这说明lotabout大牛不但技术功底好，而且写作能力也是非常不错的。
@@ -17,16 +17,16 @@ KennyWZhang，前阿里P6工程师、腾讯T3技术专家（自封的，哈哈�
 1. 手把手教你构建 C 语言编译器（8）——表达式
 1. 手把手教你构建 C 语言编译器（9）——总结
 
-## 编程环境 ##
+## 编程环境
 操作系统：阿里云服务器CentOS 6.5
 代码编辑器：vim
 编译器：GCC
 调试器：GDB
 
-## 第一步 ##
+## 第一步
 在开发编译器之前，lotabout大牛教我们先来设计虚拟机及其指令集。
 
-### MOV ###
+### MOV
 IMM <num>: 将 <num> 放入寄存器 ax 中。
 LC: 将对应地址中的字符载入 ax 中，要求 ax 中存放地址。
 LI: 将对应地址中的整数载入 ax 中，要求 ax 中存放地址。
@@ -47,19 +47,19 @@ void eval() {
 }
 ```
 
-### PUSH ###
+### PUSH
 PUSH: 将 ax 的值放入栈中。
 ```
 if (op == PUSH) {*--sp = ax;}                                     // push the value of ax onto the stack
 ```
 
-### JMP ###
+### JMP
 JMP <addr>: 跳转指令，无条件地将当前的PC寄存器设置为指定的<addr>
 ```
 if (op == JMP)  {pc = (int *)*pc;}                                // jump to the address
 ```
 
-### JZ/JNZ ###
+### JZ/JNZ
 JZ: 结果（ax）为零情况下的跳转
 JNZ: 结果（ax）不为零情况下的跳转
 ```
@@ -80,7 +80,7 @@ if (op == JZ)   { // jump if ax is not zero
 }                  
 ```
 
-### 函数调用 ###
+### 函数调用
 CALL <addr>: 跳转到地址为<addr>的子函数
 ```
 if (op == CALL) {
@@ -117,7 +117,7 @@ LEA <offset>: 得到 new_bp + 4
 ```
 if (op == LEA)  {ax = (int)(bp + *pc++);}                         // load address for arguments
 ```
-### 运算符指令 ###
+### 运算符指令
 计算后会将栈顶的参数退栈，结果存放在寄存器ax中。
 ```
 else if (op == OR)  ax = *sp++ | ax;
@@ -137,7 +137,7 @@ else if (op == MUL) ax = *sp++ * ax;
 else if (op == DIV) ax = *sp++ / ax;
 else if (op == MOD) ax = *sp++ % ax;
 ```
-### 内置函数 ###
+### 内置函数
 ```
 else if (op == EXIT) { printf("exit(%d)", *sp); return *sp;}
 else if (op == OPEN) { ax = open((char *)sp[1], sp[0]); }
@@ -150,7 +150,7 @@ else if (op == MCMP) { ax = memcmp((char *)sp[2], (char *)sp[1], *sp);}
 ```
 这里的原理是，我们的电脑上已经有了这些函数的实现，因此编译编译器时，这些函数的二进制代码就被编译进了我们的编译器，因此在我们的编译器/虚拟机上运行我们提供的这些指令时，这些函数就是可用的。换句话说就是不需要我们自己去实现了
 
-### 测试 ###
+### 测试虚拟机
 ```
 #include <stdio.h>
 #include <stdlib.h>
@@ -231,15 +231,15 @@ int main(int argc, char *argv[])
 exit(30)
 ```
 
-## 词法分析器和语法分析器 ##
+## 词法分析器和语法分析器
 
 词法分析器，用于将字符串转化成内部的表示结构。
 语法分析器，将词法分析得到的标记流（token）生成一棵语法树。
 
-1. `next()`: 用于词法分析，获取下一个标记，它将自动忽略空白字符。
+1. `next()`: 用于词法分析，获取下一个标记token，它将自动忽略空白字符，包括空格和回车。
 2. `program()`: 语法分析的入口，分析整个 C 语言程序。
 
-### 测试语法分析器的框架 ###
+### 测试语法分析器的框架
 ```
 #include <stdio.h>
 #include <stdlib.h>
@@ -286,13 +286,13 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  src[i] = 0; // add EOF character
+  src[i] = -1; // add EOF character
   close(fd);
 
   program();
 }
 ```
-编译程序 `gcc -m32 compiler1.c`，运行程序：`./a.out compiler1.c`。(在32位的机器上编译时，不需要加-m32参数)输出
+编译程序 `gcc -m32 compiler1.c`，运行程序：`./a.out compiler1.c`。输出：
 ```
 token is: #
 token is: i
@@ -301,11 +301,9 @@ token is: c
 token is: l
 ...
 ```
-这里的next()函数，把一个字符当做了一个token，事实上这是不对的。每次调用next()函数，应该从未分析过的字符流中分拆出来一个的token，比如未分析过的字符流是“100+200”这7个字符，第一次调用next()函数时，应该分拆出“单词”100，第二次调用next()函数时，应该分拆出“单词”+，第三次调用next()函数时，应该分拆出“单词”200。那么，next()函数的主体应该是如下这个样子：
+这里的next()函数，把一个字符当做了一个token，事实上这是不对的。每次调用next()函数，应该从未分析过的字符流中分拆出来一个的token，比如未分析过的字符流是“100 + 200”这9个字符，第一次调用next()函数时，应该分拆出“单词”100，第二次调用next()函数时，应该分拆出“单词”+，第三次调用next()函数时，应该分拆出“单词”200。那么，next()函数的主体应该是如下这个样子：
 ```
 void next() {
-    char *last_pos;
-    int hash;
     while (token = *src) {
         ++src;
         // parse token here
@@ -314,10 +312,400 @@ void next() {
 }
 ```
 
+### C语言中的token
+```
+// tokens and classes (operators last and in precedence order)
+enum {
+  Num = 128, Fun, Sys, Glo, Loc, Id,
+  Char, Else, Enum, If, Int, Return, Sizeof, While,
+  Assign, Cond, Lor, Lan, Or, Xor, And, Eq, Ne, Lt, Gt, Le, Ge, Shl, Shr, Add, Sub, Mul, Div, Mod, Inc, Dec, Brak
+};
+```
 
+#### 空格
+忽略空格
+```
+if (token == ' ') {
+  // do nothing
+}
+```
 
+#### 数字
+暂时只支持十进制
+```
+if (token >= '1' && token <= '9') {
+    while (*src >= '0' && *src <= '9') {
+      src++;
+    }
+  token = Num;
+  return;
+}
+```
 
-##### 联系方式 #####
+#### 加号
+```
+if (token == '+') {
+  token = Add;
+  return;
+}
+```
+
+#### 测试
+编译程序 `gcc -m32 compiler2.c`，运行程序：`./a.out onlyNumAndPlus.c`。输出：
+```
+token is: 128
+token is: 157
+token is: 128
+```
+128是枚举类型Num对应的数字，157是枚举类型Add对应的数字。
+Congratulations!!!目前的词法分析器成功识别了十进制的数字Token和加号Token。
+
+#### 支持更多的token
+#### 数字
+上面识别数字的逻辑只考虑了十进制的数字，事实上，C语言中的数字还有十六进制和八进制。
+1. 十六进制：以0x开头，比如0x7a；
+2. 八进制：以0开头，比如05，0237；
+```
+if (token >= '0' && token <= '9') {
+    // parse number, three kinds: dec(123) hex(0x123) oct(017)
+    token_val = token - '0';
+    if (token_val > 0) {
+        // dec, starts with [1-9]
+        while (*src >= '0' && *src <= '9') {
+            token_val = token_val * 10 + (*src - '0');
+            src++;
+        }
+    } else {
+        // starts with number 0
+        if (*src == 'x' || *src == 'X') {
+            // hex
+            ++src; // ignore 'x' or 'X'
+            token = *src;
+            while ((token >= '0' && token <= '9') || (token >= 'a' && token <= 'f') || (token >= 'A' && token <= 'F')) {
+                token_val = token_val * 16 + (token & 15) + (token >= 'A' ? 9 : 0);
+                src++;
+                token = *src;
+            }
+        } else {
+            // oct
+            while (*src >= '0' && *src <= '7') {
+                token_val = token_val * 8 + (*src - '0');
+                src++;
+            }
+        }
+    }
+    token = Num;
+    return;
+}
+```
+
+#### 换行符
+```
+if (token == '\n') {
+    ++line;
+}
+```
+
+#### 宏定义
+我们设计的编译器并不打算支持宏定义，所以直接跳过它们。
+```
+if (token == '#') {
+    // skip macro, because we will not support it
+    while (*src != 0 && *src != '\n') { // 0 is EOF
+        src++;
+    }
+}
+```
+
+#### 标识符与符号表
+标识符（identifier）可以理解为变量名。对于语法分析而言，我们并不关心一个变量具体叫什么名字，而只关心这个变量名代表的唯一标识。例如 int a; 定义了变量 a，而之后的语句 a = 10，我们需要知道这两个 a 指向的是同一个变量。
+
+基于这个理由，词法分析器会把扫描到的标识符全都保存到一张表中，遇到新的标识符就去查这张表，如果标识符已经存在，就返回它的唯一标识。
+
+那么我们怎么表示标识符呢？如下
+```
+struct identifier {
+    int token;
+    int hash;
+    char * name;
+    int class;
+    int type;
+    int value;
+    int Bclass;
+    int Btype;
+    int Bvalue;
+}
+```
+这里解释一下具体的含义：
+
+    token：该标识符返回的标记，理论上所有的变量返回的标记都应该是 Id，但实际上由于我们还将在符号表中加入关键字如 if, while 等，它们都有对应的标记。
+    hash：顾名思义，就是这个标识符的哈希值，用于标识符的快速比较。
+    name：存放标识符本身的字符串。
+    class：该标识符的类别，如数字，全局变量或局部变量等。
+    type：标识符的类型，即如果它是个变量，变量是 int 型、char 型还是指针型。
+    value：存放这个标识符的值，如标识符是函数，刚存放函数的地址。
+    BXXXX：C 语言中标识符可以是全局的也可以是局部的，当局部标识符的名字与全局标识符相同时，用作保存全局标识符的信息。
+
+由上可以看出，我们实现的词法分析器与传统意义上的词法分析器不太相同。传统意义上的符号表只需要知道标识符的唯一标识即可，而我们还存放了一些只有语法分析器才会得到的信息，如 type 。
+
+由于我们的目标是能自举，而我们定义的语法不支持 struct，故而使用下列方式
+Symbol table:
+----+-----+----+----+----+-----+-----+-----+------+------+----
+ .. |token|hash|name|type|class|value|btype|bclass|bvalue| ..
+----+-----+----+----+----+-----+-----+-----+------+------+----
+    |<---       one single identifier                --->|
+
+即用一个整型数组来保存相关的ID信息。每个ID占用数组中的9个空间，分析标识符的相关代码如下：
+```
+int token_val;                // value of current token (mainly for number)
+int *current_id,              // current parsed ID
+    *symbols;                 // symbol table
+// fields of identifier
+enum {Token, Hash, Name, Type, Class, Value, BType, BClass, BValue, IdSize};
+void next() {
+        ...
+        else if ((token >= 'a' && token <= 'z') || (token >= 'A' && token <= 'Z') || (token == '_')) {
+            // parse identifier
+            last_pos = src - 1;
+            hash = token;
+            while ((*src >= 'a' && *src <= 'z') || (*src >= 'A' && *src <= 'Z') || (*src >= '0' && *src <= '9') || (*src == '_')) {
+                hash = hash * 147 + *src;
+                src++;
+            }
+            // look for existing identifier, linear search
+            current_id = symbols;
+            while (current_id[Token]) {
+                if (current_id[Hash] == hash && !memcmp((char *)current_id[Name], last_pos, src - last_pos)) {
+                    //found one, return
+                    token = current_id[Token];
+                    return;
+                }
+                current_id = current_id + IdSize;
+            }
+            // store new ID
+            current_id[Name] = (int)last_pos;
+            current_id[Hash] = hash;
+            token = current_id[Token] = Id;
+            return;
+        }
+        ...
+}
+```
+查找已有标识符的方法是线性查找符号表。
+
+#### 字符串
+在分析时，如果分析到字符串，我们需要将它存放到前一篇文章中说的`data`段中。然后返回它在`data`段中的地址。另一个特殊的地方是我们需要支持转义符。例如用`\n`表示换行符。由于本编译器的目的是达到自己编译自己，所以代码中并没有支持除`\n`的转义符，如`\t`,`\r` 等，但仍支持`\a`表示字符a的语法，如`\"`表示"。
+
+在分析时，我们将同时分析单个字符如 'a' 和字符串如 "a string"。若得到的是单个字符，我们以 Num 的形式返回。相关代码如下：
+```
+if (token == '"' || token == '\'') {
+    // parse string literal, currently, the only supported escape character is '\n', store the string literal into data.
+    last_pos = data;
+    while (*src != 0 && *src != token) {
+        token_val = *src++;
+        if (token_val == '\\') {
+            // escape character
+            token_val = *src++;
+            if (token_val == 'n') {
+                token_val = '\n';
+            }
+        }
+        if (token == '"') {
+            *data++ = token_val;
+        }
+    }
+    src++;
+    // if it is a single character, return Num token
+    if (token == '"') {
+        token_val = (int)last_pos;
+    } else {
+        token = Num;
+    }
+    return;
+}
+```
+#### 注释
+在C语言中，只支持`//`类型的注释，并不支持`/* comments */`类型的注释。
+```
+if (token == '/') {
+    if (*src == '/') {
+        // skip comments
+        while (*src != 0 && *src != '\n') {
+            ++src;
+        }
+    } else {
+        // divide operator
+        token = Div;
+        return;
+    }
+}
+```
+
+#### 关键字与内置函数
+虽然上面写完了词法分析器，但还有一个问题需要考虑，那就是“关键字”，例如 if, while, return 等。它们不能被作为普通的标识符，因为有特殊的含义。
+
+一般有两种处理方法：
+
+1. 词法分析器中直接解析这些关键字。
+2. 在语法分析前将关键字提前加入符号表。
+
+这里我们就采用**第二种方法**，将它们加入符号表，并提前为它们赋予必要的信息（还记得前面说的标识符Token字段吗？）。这样当源代码中出现关键字时，它们会被解析成标识符，但由于符号表中已经有了相关的信息，我们就能知道它们是特殊的关键字。
+
+内置函数的行为也和关键字类似，不同的只是赋值的信息。在main函数中进行初始化如下：
+```
+// types of variable/function
+enum { CHAR, INT, PTR };
+int *idmain;
+
+void main() {
+    ...
+    src = "char else enum if int return sizeof while open read close printf malloc memset memcmp exit void main";
+
+     // add keywords to symbol table
+    i = Char;
+    while (i <= While) {
+        next();
+        current_id[Token] = i++;
+    }
+
+    // add library to symbol table
+    i = OPEN;
+    while (i <= EXIT) {
+        next();
+        current_id[Class] = Sys;
+        current_id[Type] = INT;
+        current_id[Value] = i++;
+    }
+
+    next(); current_id[Token] = Char; // handle void type
+    next(); idmain = current_id; // keep track of main
+    ...
+}
+```
+
+#### 其它
+其它的Token的解析就相对比较容易，直接贴上代码：
+```
+if (token == '=') {
+    // parse '==' and '='
+    if (*src == '=') {
+        src++;
+        token = Eq;
+    } else {
+        token = Assign;
+    }
+    return;
+}
+else if (token == '+') {
+    // parse '+' and '++'
+    // ignore '+='
+    if (*src == '+') {
+        src++;
+        token = Inc;
+    } else {
+        token = Add;
+    }
+    return;
+}
+else if (token == '-') {
+    // parse '-' and '--'
+    // ignore '-='
+    if (*src == '-') {
+        src++;
+        token = Dec;
+    } else {
+        token = Sub;
+    }
+    return;
+}
+else if (token == '!') {
+    // parse '!='
+    if (*src == '=') {
+        src++;
+        token = Ne;
+    }
+    return;
+}
+else if (token == '<') {
+    // parse '<=', '<<' or '<'
+    if (*src == '=') {
+        src++;
+        token = Le;
+    } else if (*src == '<') {
+        src++;
+        token = Shl;
+    } else {
+        token = Lt;
+    }
+    return;
+}
+else if (token == '>') {
+    // parse '>=', '>>' or '>'
+    if (*src == '=') {
+        src++;
+        token = Ge;
+    } else if (*src == '>') {
+        src++;
+        token = Shr;
+    } else {
+        token = Gt;
+    }
+    return;
+}
+else if (token == '|') {
+    // parse '|' or '||'
+    if (*src == '|') {
+        src++;
+        token = Lor;
+    } else {
+        token = Or;
+    }
+    return;
+}
+else if (token == '&') {
+    // parse '&' and '&&'
+    if (*src == '&') {
+        src++;
+        token = Lan;
+    } else {
+        token = And;
+    }
+    return;
+}
+else if (token == '^') {
+    token = Xor;
+    return;
+}
+else if (token == '%') {
+    token = Mod;
+    return;
+}
+else if (token == '*') {
+    // ignore '*='
+    token = Mul;
+    return;
+}
+else if (token == '[') {
+    token = Brak;
+    return;
+}
+else if (token == '?') {
+    token = Cond;
+    return;
+}
+else if (token == '~' || token == ';' || token == '{' || token == '}' || token == '(' || token == ')' || token == ']' || token == ',' || token == ':') {
+    // directly return the character as token;
+    return;
+}
+```
+
+#### 测试
+编译程序 `gcc -m32 compiler3.c`，运行程序：`./a.out compiler3.c`。输出：
+```
+
+```
+
+###### 联系方式
 * 邮箱：victorypiter@msn.com（欢迎大家发邮件跟我交流）
 * QQ群：399128966
 * 简书：[Kenny_W_Zhang](http://www.jianshu.com/users/fcfa0c6182e4)
