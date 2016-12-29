@@ -718,120 +718,274 @@ token is: 59
 ```
 Congratulations again!!!改进后的词法分析器已经成功识别了C语言中的绝大部分的Token。
 
-#### 递归下降
-**四则运算的实现**
-消除左递归后的文法如下：
-```
-<expr> ::= <term> <expr_tail>
-<expr_tail> ::= + <term> <expr_tail>
-              | - <term> <expr_tail>
-              | <empty>
-<term> ::= <factor> <term_tail>
-<term_tail> ::= * <factor> <term_tail>
-              | / <factor> <term_tail>
-              | <empty>
-<factor> ::= ( <expr> )
-           | Num
-```
+#### 自顶向下语法分析--递归下降法
+一上来就看lotabout大大牛的文章“手把手教你构建 C 语言编译器（4）- 递归下降”，是比较难看懂的。
+为了看懂那篇文章，现在我们先做一个实验：**递归下降法判断算术表达式的正确性**
+[链接](http://wenku.baidu.com/view/889db11bf242336c1fb95e1b.html)
 
-语法分析器：
+实验对应的源代码如下：
 ```
-int expr();
-int factor() {
-    int value = 0;
-    if (token == '(') {
-        match('(');
-        value = expr();
-        match(')');
-    } else {
-        value = token_val;
-        match(Num);
-    }
-    return value;
-}
-int term_tail(int lvalue) {
-    if (token == '*') {
-        match('*');
-        int value = lvalue * factor();
-        return term_tail(value);
-    } else if (token == '/') {
-        match('/');
-        int value = lvalue / factor();
-        return term_tail(value);
-    } else {
-        return lvalue;
-    }
-}
-int term() {
-    int lvalue = factor();
-    return term_tail(lvalue);
-}
-int expr_tail(int lvalue) {
-    if (token == '+') {
-        match('+');
-        int value = lvalue + term();
-        return expr_tail(value);
-    } else if (token == '-') {
-        match('-');
-        int value = lvalue - term();
-        return expr_tail(value);
-    } else {
-        return lvalue;
-    }
-}
-int expr() {
-    int lvalue = term();
-    return expr_tail(lvalue);
-}
-```
+#include<stdio.h>
+#include<string.h>
 
-词法分析器：
-```
-#include <stdio.h>
-#include <stdlib.h>
-enum {Num};
-int token;
-int token_val;
-char *line = NULL;
-char *src = NULL;
-void next() {
-    // skip white space
-    while (*src == ' ' || *src == '\t') {
-        src ++;
-    }
-    token = *src++;
-    if (token >= '0' && token <= '9' ) {
-        token_val = token - '0';
-        token = Num;
-        while (*src >= '0' && *src <= '9') {
-            token_val = token_val*10 + *src - '0';
-            src ++;
-        }
-        return;
+//全局变量
+char exps[30];
+char gra[30];
+char prod[30] = "";
+char chExp = '#';
+int expSize=0,graSize=0,step=0;
+
+//函数声明
+int E();
+int T();
+int G();
+int S();
+int F();
+
+//功能函数实现
+/*打印文法*/
+void printGrammar()
+{
+    printf("\t\t\t 递归下降分析程序构造\n\t\t（作者：董正荣,邮箱：chinadongzr@163.com）\n");
+    printf("-----------------------------------------------------------\n");
+    printf("\t\t\t （1）E->TG\n");
+    printf("\t\t\t （2）G->+TG|－TG|ε\n");
+    printf("\t\t\t （3）T->FS\n");
+    printf("\t\t\t （4）S->*FS|/FS|ε\n");
+    printf("\t\t\t （5）F->(E)|i\n");
+    printf("-----------------------------------------------------------\n");
+}
+
+void GetExp()
+{
+    printf("请输入表达式：（以#结束）\t");
+    gets(exps);//获得输入表达式
+    expSize=strlen(exps);
+    chExp=exps[0];
+    printf("----------------------------------------------------------\n");
+    //puts(exps);//显示
+}
+
+void printHead()
+{
+    printf("步骤：\t 语法栈：\t\t输入串：\t产生式：\n");
+}
+
+void printStep()
+{
+    printf("%d\t%-20s %10s\t \t%-15s\n",step,gra,exps,prod);
+    strcpy(prod,"");
+    step++;
+    if(chExp=='#'&&gra[graSize-1]=='#')
+    {
+        printf("\n表达式分析成功！\n");
     }
 }
-void match(int tk) {
-    if (token != tk) {
-        printf("expected token: %d(%c), got: %d(%c)\n", tk, tk, token, token);
-        exit(-1);
+
+//语法栈入栈，匹配的语法产生式顺序入栈
+void pushGraStack(char* ch)
+{
+    for(int i=0;i<strlen(ch);i++)
+    {
+        gra[graSize]=ch[strlen(ch)-1-i];
+        graSize++;
     }
-    next();
 }
-```
-最后是main函数：
-```
-int main(int argc, char *argv[]) {
-    size_t linecap = 0;
-    ssize_t linelen;
-    while ((linelen = getline(&line, &linecap, stdin)) > 0) {
-        src = line;
-        next();
-        printf("%d\n", expr());
+
+//语法栈出栈，返回字符ch
+char popGraStack()
+{
+    char ch;
+    ch=gra[graSize-1];
+    gra[graSize-1]='\0';
+    graSize--;
+    return ch;
+}
+
+//表达式出栈，匹配字符ch
+void nextChar()
+{
+    for(int i=0;i<expSize-1;i++)
+    {
+        exps[i]=exps[i+1];
     }
+    exps[expSize-1]='\0';
+    expSize--;
+    chExp=exps[0];
+    printf("当前chExp是%c\n",chExp);
+}
+
+//初始化语法栈
+void InitGra()
+{
+    gra[graSize]='#';
+    graSize++;
+    gra[graSize]='E';
+    graSize++;
+    printStep();
+}
+
+//错误打印
+void printError()
+{
+    printf("\n表达式不匹配！\n");
+}
+
+//主程序
+int main()
+{
+    printGrammar();//输出文法
+    GetExp();//获取输入表达式
+    printHead();//打印题头
+    InitGra();//初始化语法栈
+    E();
+    printf("Recursive Down Analyse App!\n");
+
     return 0;
 }
+
+int E()
+{
+    popGraStack();
+    char graE[]="TG";
+    pushGraStack(graE);
+    strcpy(prod,"E-->TG");
+    printStep();
+    T();
+    G();
+    return 1;
+}
+
+int T()
+{
+    popGraStack();
+    char graT[]="FS";
+    pushGraStack(graT);
+    strcpy(prod,"T-->FS");
+    printStep();
+    F();
+    S();
+    return 1;
+}
+
+int G()
+{
+    if(chExp=='+'||chExp=='-')
+    {
+        popGraStack();
+        char graG[]={chExp,'T','G','\0'};
+        pushGraStack(graG);
+        strcpy(prod,"G-->");
+        strcat(prod,graG);
+        printStep();
+        popGraStack();
+        nextChar();
+        strcpy(prod,"匹配");
+        printStep();
+        T();
+        G();
+        return 1;
+    }
+    else
+    {
+        strcpy(prod,"G-->ε");
+        printStep();
+        popGraStack();
+        strcpy(prod,"匹配");
+        printStep();
+        return 1;
+    }
+}
+
+int F()
+{
+    if(chExp=='(')
+    {
+        popGraStack();
+        char graF[]="(E)";
+        pushGraStack(graF);
+        strcpy(prod,"F-->(E)");
+        printStep();
+        popGraStack();
+        nextChar();
+        strcpy(prod,"匹配");
+        printStep();
+        E();
+        if(chExp==')')
+        {
+            popGraStack();
+            nextChar();
+            strcpy(prod,"匹配");
+            printStep();
+            return 1;
+        }
+        else
+        {
+            printError();
+            return 0;
+        }
+    }
+    else if(chExp=='i')
+    {
+        strcpy(prod,"F-->i");
+        printStep();
+        popGraStack();
+        nextChar();
+        strcpy(prod,"匹配");
+        printStep();
+        return 1;
+    }
+    else
+    {
+        printError();
+        return 0;
+    }
+}
+
+int S()
+{
+    if(chExp=='*'||chExp=='/')
+    {
+        popGraStack();
+        char graS[]={chExp,'F','S','\0'};
+        pushGraStack(graS);
+        strcpy(prod,"S-->");
+        strcat(prod,graS);
+        printStep();
+        popGraStack();
+        nextChar();
+        strcpy(prod,"匹配");
+        printStep();
+        F();
+        S();
+        return 1;
+    }
+    else
+    {
+        strcpy(prod,"S-->ε");
+        printStep();
+        popGraStack();
+        strcpy(prod,"匹配");
+        printStep();
+        return 1;
+    }
+}
+```
+编译`gcc RDA.c`，然后运行`./a.out`，输入`i+i*(i-i/i)#`，输出：
+```
+...
+表达式分析成功！
 ```
 
+理解了这个实验之后，我们再来看lotabout大牛的文章，现在应该就可以看懂了。^_^
+* [手把手教你构建 C 语言编译器（4）——递归下降](http://lotabout.me/2015/write-a-C-interpreter-4/)<br>
+
+编译`gcc compiler4.c`，然后运行`./a.out`，输入`2+3*(5-4/2)`，输出：
+```
+11
+```
+再次恭喜我们自己!!!我们已经懂得了如何写一个简单的语法分析器，离写出一个完整的C语言子集的编译器，仅一步之遥了。
+下一步，我们会完善我们的语法分析器，以支持更多的c语言中的“表达式”或者“语句”。
 
 ###### 联系方式
 * 邮箱：victorypiter@msn.com（欢迎大家发邮件跟我交流）
