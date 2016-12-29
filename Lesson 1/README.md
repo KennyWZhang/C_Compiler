@@ -6,34 +6,36 @@ KennyWZhang，前阿里P6工程师、腾讯T3技术专家（自封的，哈哈�
 ## 正文
 关于编译器开发入门的文章中，到目前为止，网络上我见过的最好文章，莫过于[lotabout大牛](http://lotabout.me)写的“手把手教你构建 C 语言编译器”系列。（原谅我不知道他的真实姓名，姑且称他做lotabout大牛）lotabout大牛的文章写得精炼明了，可以让一个对《编译原理》不太理解的新手开发出一个简单的C语言子集的编译器原型，这说明lotabout大牛不但技术功底好，而且写作能力也是非常不错的。
 
-“手把手教你构建 C 语言编译器”系列共有10个部分：<br>
-1. [手把手教你构建 C 语言编译器（0）——前言](http://lotabout.me/2015/write-a-C-interpreter-0/)<br>
-2. 手把手教你构建 C 语言编译器（1）——设计<br>
-3. 手把手教你构建 C 语言编译器（2）——虚拟机<br>
-4. 手把手教你构建 C 语言编译器（3）——词法分析器<br>
-5. 手把手教你构建 C 语言编译器（4）——递归下降<br>
-6. 手把手教你构建 C 语言编译器（5）——变量定义<br>
-7. 手把手教你构建 C 语言编译器（6）——函数定义<br>
-8. 手把手教你构建 C 语言编译器（7）——语句<br>
-9. 手把手教你构建 C 语言编译器（8）——表达式<br>
-10. 手把手教你构建 C 语言编译器（9）——总结<br>
+“手把手教你构建 C 语言编译器”系列共有10个部分：  
+1. [手把手教你构建 C 语言编译器（0）——前言](http://lotabout.me/2015/write-a-C-interpreter-0/)  
+2. 手把手教你构建 C 语言编译器（1）——设计  
+3. 手把手教你构建 C 语言编译器（2）——虚拟机  
+4. 手把手教你构建 C 语言编译器（3）——词法分析器  
+5. 手把手教你构建 C 语言编译器（4）——递归下降  
+6. 手把手教你构建 C 语言编译器（5）——变量定义  
+7. 手把手教你构建 C 语言编译器（6）——函数定义  
+8. 手把手教你构建 C 语言编译器（7）——语句  
+9. 手把手教你构建 C 语言编译器（8）——表达式  
+10. 手把手教你构建 C 语言编译器（9）——总结  
 
 ## 编程环境
-操作系统：阿里云服务器CentOS 6.5<br>
-代码编辑器：vim<br>
-编译器：GCC<br>
-调试器：GDB<br>
+
+操作系统：阿里云服务器CentOS 6.5  
+代码编辑器：vim  
+编译器：GCC  
+调试器：GDB  
 
 ## 第一步
 在开发编译器之前，lotabout大牛教我们先来设计虚拟机及其指令集。
 
 ### MOV
-IMM <num>: 将 <num> 放入寄存器 ax 中。<br>
-LC: 将对应地址中的字符载入 ax 中，要求 ax 中存放地址。<br>
-LI: 将对应地址中的整数载入 ax 中，要求 ax 中存放地址。<br>
-SC: 将 ax 中的数据作为字符存放入地址中，要求栈顶存放地址。<br>
-SI: 将 ax 中的数据作为整数存放入地址中，要求栈顶存放地址。<br>
-```
+IMM <num>: 将 <num> 放入寄存器 ax 中。  
+LC: 将对应地址中的字符载入 ax 中，要求 ax 中存放地址。  
+LI: 将对应地址中的整数载入 ax 中，要求 ax 中存放地址。  
+SC: 将 ax 中的数据作为字符存放入地址中，要求栈顶存放地址。  
+SI: 将 ax 中的数据作为整数存放入地址中，要求栈顶存放地址。  
+
+```C
 void eval() {
     int op, *tmp;
     while (1) {
@@ -50,19 +52,22 @@ void eval() {
 
 ### PUSH
 PUSH: 将 ax 的值放入栈中。
-```
+
+```C
 if (op == PUSH) {*--sp = ax;}                                     // push the value of ax onto the stack
 ```
 
 ### JMP
 JMP <addr>: 跳转指令，无条件地将当前的PC寄存器设置为指定的<addr>
-```
+
+```C
 if (op == JMP)  {pc = (int *)*pc;}                                // jump to the address
 ```
 
 ### JZ/JNZ
-JZ: 结果（ax）为零情况下的跳转
+JZ: 结果（ax）为零情况下的跳转  
 JNZ: 结果（ax）不为零情况下的跳转
+
 ```
 if (op == JZ)   { // jump if ax is zero
 	if (ax == 0 ) {
@@ -83,18 +88,21 @@ if (op == JZ)   { // jump if ax is not zero
 
 ### 函数调用
 CALL <addr>: 跳转到地址为<addr>的子函数
+
 ```
 if (op == CALL) {
 	*--sp = (int)(pc + 1);
 	pc = (int *)*pc;
 }
 ```
-调用函数传递参数给被调用函数和被调用函数返回结果给调用函数
+
+调用函数传递参数给被调用函数和被调用函数返回结果给调用函数  
 1. 由调用者将参数入栈
 1. 调用结束时，由调用者将参数出栈
 1. 参数逆序入栈
 
 ENT <size>: 保存当前的栈指针，同时在栈上保留一定的空间，用以存放局部变量
+
 ```
 if (op == ENT)  { // make new stack frame
 	*--sp = (int)bp;
@@ -102,11 +110,15 @@ if (op == ENT)  { // make new stack frame
 	sp = sp - *pc++;
 }
 ```
+
 ADJ <size>: 将调用子函数时压入栈中的数据清除
+
 ```
 if (op == ADJ)  {sp = sp + *pc++;}                                // add esp, <size>
 ```
+
 LEV: 函数调用返回
+
 ```
 if (op == LEV)  { // restore call frame and PC
 	sp = bp;
@@ -114,13 +126,17 @@ if (op == LEV)  { // restore call frame and PC
 	pc = (int *)*sp++;
 }
 ```
+
 LEA <offset>: 得到 new_bp + 4
+
 ```
 if (op == LEA)  {ax = (int)(bp + *pc++);}                         // load address for arguments
 ```
+
 ### 运算符指令
 计算后会将栈顶的参数退栈，结果存放在寄存器ax中。
-```
+
+```C
 else if (op == OR)  ax = *sp++ | ax;
 else if (op == XOR) ax = *sp++ ^ ax;
 else if (op == AND) ax = *sp++ & ax;
@@ -138,8 +154,10 @@ else if (op == MUL) ax = *sp++ * ax;
 else if (op == DIV) ax = *sp++ / ax;
 else if (op == MOD) ax = *sp++ % ax;
 ```
+
 ### 内置函数
-```
+
+```C
 else if (op == EXIT) { printf("exit(%d)", *sp); return *sp;}
 else if (op == OPEN) { ax = open((char *)sp[1], sp[0]); }
 else if (op == CLOS) { ax = close(*sp);}
@@ -152,7 +170,7 @@ else if (op == MCMP) { ax = memcmp((char *)sp[2], (char *)sp[1], *sp);}
 这里的原理是，我们的电脑上已经有了这些函数的实现，因此编译编译器时，这些函数的二进制代码就被编译进了我们的编译器，因此在我们的编译器/虚拟机上运行我们提供的这些指令时，这些函数就是可用的。换句话说就是不需要我们自己去实现了
 
 ### 测试虚拟机
-```
+```C
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
@@ -228,20 +246,19 @@ int main(int argc, char *argv[])
 ```
 
 编译程序 `gcc -m32 compiler0.c`，运行程序：`./a.out`。(在32位的机器上编译时，不需要加-m32参数)输出
-```
-exit(30)
-```
+> exit(30)
 
 ## 词法分析器和语法分析器
 
-词法分析器，用于将字符串转化成内部的表示结构。
+词法分析器，用于将字符串转化成内部的表示结构。  
 语法分析器，将词法分析得到的标记流（token）生成一棵语法树。
 
 1. `next()`: 用于词法分析，获取下一个标记token，它将自动忽略空白字符，包括空格和回车。
 2. `program()`: 语法分析的入口，分析整个 C 语言程序。
 
 ### 测试语法分析器的框架
-```
+
+```C
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
@@ -293,7 +310,9 @@ int main(int argc, char *argv[]) {
   program();
 }
 ```
+
 编译程序 `gcc -m32 compiler1.c`，运行程序：`./a.out compiler1.c`。输出：
+
 ```
 token is: #
 token is: i
@@ -303,6 +322,7 @@ token is: l
 ...
 ```
 这里的next()函数，把一个字符当做了一个token，事实上这是不对的。每次调用next()函数，应该从未分析过的字符流中分拆出来一个的token，比如未分析过的字符流是“100 + 200”这9个字符，第一次调用next()函数时，应该分拆出“单词”100，第二次调用next()函数时，应该分拆出“单词”+，第三次调用next()函数时，应该分拆出“单词”200。那么，next()函数的主体应该是如下这个样子：
+
 ```
 void next() {
     while (token = *src) {
@@ -314,6 +334,7 @@ void next() {
 ```
 
 ### C语言中的token
+
 ```
 // tokens and classes (operators last and in precedence order)
 enum {
@@ -325,6 +346,7 @@ enum {
 
 #### 空格
 忽略空格
+
 ```
 if (token == ' ') {
   // do nothing
@@ -333,6 +355,7 @@ if (token == ' ') {
 
 #### 数字
 暂时只支持十进制
+
 ```
 if (token >= '1' && token <= '9') {
     while (*src >= '0' && *src <= '9') {
@@ -353,19 +376,19 @@ if (token == '+') {
 
 #### 测试
 编译程序 `gcc -m32 compiler2.c`，运行程序：`./a.out onlyNumAndPlus.c`。输出：
-```
-token is: 128
-token is: 157
-token is: 128
-```
-128是枚举类型Num对应的数字，157是枚举类型Add对应的数字。
+> token is: 128
+> token is: 157
+> token is: 128
+
+128是枚举类型Num对应的数字，157是枚举类型Add对应的数字。  
 Congratulations!!!目前的词法分析器成功识别了十进制的数字Token和加号Token。
 
 #### 支持更多的token
 #### 数字
-上面识别数字的逻辑只考虑了十进制的数字，事实上，C语言中的数字还有十六进制和八进制。
+上面识别数字的逻辑只考虑了十进制的数字，事实上，C语言中的数字还有十六进制和八进制。  
 1. 十六进制：以0x开头，比如0x7a；
 2. 八进制：以0开头，比如05，0237；
+
 ```
 if (token >= '0' && token <= '9') {
     // parse number, three kinds: dec(123) hex(0x123) oct(017)
@@ -401,6 +424,7 @@ if (token >= '0' && token <= '9') {
 ```
 
 #### 换行符
+
 ```
 if (token == '\n') {
     ++line;
@@ -409,6 +433,7 @@ if (token == '\n') {
 
 #### 宏定义
 我们设计的编译器并不打算支持宏定义，所以直接跳过它们。
+
 ```
 if (token == '#') {
     // skip macro, because we will not support it
@@ -719,12 +744,14 @@ token is: 59
 Congratulations again!!!改进后的词法分析器已经成功识别了C语言中的绝大部分的Token。
 
 #### 自顶向下语法分析--递归下降法
-一上来就看lotabout大大牛的文章“手把手教你构建 C 语言编译器（4）- 递归下降”，是比较难看懂的。
-为了看懂那篇文章，现在我们先做一个实验：**递归下降法判断算术表达式的正确性**
+
+一上来就看lotabout大大牛的文章“手把手教你构建 C 语言编译器（4）- 递归下降”，是比较难看懂的。  
+为了看懂那篇文章，现在我们先做一个实验：**递归下降法判断算术表达式的正确性**  
 [链接](http://wenku.baidu.com/view/889db11bf242336c1fb95e1b.html)
 
 实验对应的源代码如下：
-```
+
+```C
 #include<stdio.h>
 #include<string.h>
 
@@ -972,6 +999,7 @@ int S()
 }
 ```
 编译`gcc RDA.c`，然后运行`./a.out`，输入`i+i*(i-i/i)#`，输出：
+
 ```
 ...
 表达式分析成功！
@@ -981,10 +1009,9 @@ int S()
 * [手把手教你构建 C 语言编译器（4）——递归下降](http://lotabout.me/2015/write-a-C-interpreter-4/)<br>
 
 编译`gcc compiler4.c`，然后运行`./a.out`，输入`2+3*(5-4/2)`，输出：
-```
-11
-```
-再次恭喜我们自己!!!我们已经懂得了如何写一个简单的语法分析器，离写出一个完整的C语言子集的编译器，仅一步之遥了。
+> 11
+
+再次恭喜我们自己!!!我们已经懂得了如何写一个简单的语法分析器，离写出一个完整的C语言子集的编译器，仅一步之遥了。  
 下一步，我们会完善我们的语法分析器，以支持更多的c语言中的“表达式”或者“语句”。
 
 ###### 联系方式
