@@ -1014,6 +1014,1018 @@ int S()
 再次恭喜我们自己!!!我们已经懂得了如何写一个简单的语法分析器，离写出一个完整的C语言子集的编译器，仅一步之遥了。  
 下一步，我们会完善我们的语法分析器，以支持更多的c语言中的“表达式”或者“语句”。
 
+#### 解析变量的定义
+
+EBNF表示
+```
+program ::= {global_declaration}+
+global_declaration ::= enum_decl | variable_decl | function_decl
+enum_decl ::= 'enum' [id] '{' id ['=' 'num'] {',' id ['=' 'num'] '}'
+variable_decl ::= type {'*'} id { ',' {'*'} id } ';'
+function_decl ::= type {'*'} id '(' parameter_decl ')' '{' body_decl '}'
+parameter_decl ::= type {'*'} id {',' type {'*'} id}
+body_decl ::= {variable_decl}, {statement}
+statement ::= non_empty_statement | empty_statement
+non_empty_statement ::= if_statement | while_statement | '{' statement '}'
+                     | 'return' expression | expression ';'
+if_statement ::= 'if' '(' expression ')' statement ['else' non_empty_statement]
+while_statement ::= 'while' '(' expression ')' non_empty_statement
+```
+这一节重点介绍如何解析定义枚举型变量`enum_decl`和普通变量`variable_decl`的语句，下一节将介绍如何解析定义函数的语句。
+
+##### program()
+
+```C
+void program() {
+    // get next token
+    next();
+    while (token > 0) {
+        global_declaration();
+    }
+}
+```
+
+##### global_declaration()
+
+```C
+int basetype;    // the type of a declaration, make it global for convenience
+int expr_type;   // the type of an expression
+void global_declaration() {
+    // global_declaration ::= enum_decl | variable_decl | function_decl
+    //
+    // enum_decl ::= 'enum' [id] '{' id ['=' 'num'] {',' id ['=' 'num'} '}'
+    //
+    // variable_decl ::= type {'*'} id { ',' {'*'} id } ';'
+    //
+    // function_decl ::= type {'*'} id '(' parameter_decl ')' '{' body_decl '}'
+    int type; // tmp, actual type for variable
+    int i; // tmp
+    basetype = INT;
+    // parse enum, this should be treated alone.
+    if (token == Enum) {
+        // enum [id] { a = 10, b = 20, ... }
+        match(Enum);
+        if (token != '{') {
+            match(Id); // skip the [id] part
+        }
+        if (token == '{') {
+            // parse the assign part
+            match('{');
+            enum_declaration();
+            match('}');
+        }
+        match(';');
+        return;
+    }
+    // parse type information
+    if (token == Int) {
+        match(Int);
+    }
+    else if (token == Char) {
+        match(Char);
+        basetype = CHAR;
+    }
+    // parse the comma seperated variable declaration.
+    while (token != ';' && token != '}') {
+        type = basetype;
+        // parse pointer type, note that there may exist `int ****x;`
+        while (token == Mul) {
+            match(Mul);
+            type = type + PTR;
+        }
+        if (token != Id) {
+            // invalid declaration
+            printf("%d: bad global declaration\n", line);
+            exit(-1);
+        }
+        if (current_id[Class]) {
+            // identifier exists
+            printf("%d: duplicate global declaration\n", line);
+            exit(-1);
+        }
+        match(Id);
+        current_id[Type] = type;
+        if (token == '(') {
+            current_id[Class] = Fun;
+            current_id[Value] = (int)(text + 1); // the memory address of function
+            // function_declaration();
+        } else {
+            // variable declaration
+            current_id[Class] = Glo; // global variable
+            current_id[Value] = (int)data; // assign memory address
+            data = data + sizeof(int);
+        }
+        if (token == ',') {
+            match(',');
+        }
+    }
+    next();
+}
+```
+
+##### enum_declaration()
+
+```C
+void enum_declaration() {
+    // parse enum [id] { a = 1, b = 3, ...}
+    int i;
+    i = 0;
+    while (token != '}') {
+        if (token != Id) {
+            printf("%d: bad enum identifier %d\n", line, token);
+            exit(-1);
+        }
+        next();
+        if (token == Assign) {
+            // like {a=10}
+            next();
+            if (token != Num) {
+                printf("%d: bad enum initializer\n", line);
+                exit(-1);
+            }
+            i = token_val;
+            next();
+        }
+        current_id[Class] = Num;
+        current_id[Type] = INT;
+        current_id[Value] = i++;
+        if (token == ',') {
+            next();
+        }
+    }
+}
+```
+
+##### match()
+
+```C
+void match(int tk) {
+    if (token == tk) {
+        next();
+    } else {
+        printf("%d: expected token: %d\n", line, tk);
+        exit(-1);
+    }
+}
+```
+
+编译`gcc compiler5.c`，由于我们还没有实现`function_declaration()`函数，程序暂时无法测试。
+
+>
+
+#### 解析函数的定义
+
+这里最为重要的一点是，无论是函数的参数（如 param_a）还是函数的局部变量（如 local_1）都是存放在计算机的 栈 上的。因此，与存放在 数据段 中的全局变量不同，在函数内访问它们是通过 new_bp 指针和对应的位移量进行的。因此，在解析的过程中，我们需要知道参数的个数，各个参数的位移量。
+
+##### function_declaration()
+
+```C
+void function_declaration() {
+    // type func_name (...) {...}
+    //               | this part
+    match('(');
+    function_parameter();
+    match(')');
+    match('{');
+    function_body();
+    //match('}');                 //  ①
+    // ②
+    // unwind local variable declarations for all local variables.
+    current_id = symbols;
+    while (current_id[Token]) {
+        if (current_id[Class] == Loc) {
+            current_id[Class] = current_id[BClass];
+            current_id[Type]  = current_id[BType];
+            current_id[Value] = current_id[BValue];
+        }
+        current_id = current_id + IdSize;
+    }
+}
+```
+
+##### function_parameter()
+
+```C
+int index_of_bp; // index of bp pointer on stack
+void function_parameter() {
+    int type;
+    int params;
+    params = 0;
+    while (token != ')') {
+        // ①
+        // int name, ...
+        type = INT;
+        if (token == Int) {
+            match(Int);
+        } else if (token == Char) {
+            type = CHAR;
+            match(Char);
+        }
+        // pointer type
+        while (token == Mul) {
+            match(Mul);
+            type = type + PTR;
+        }
+        // parameter name
+        if (token != Id) {
+            printf("%d: bad parameter declaration\n", line);
+            exit(-1);
+        }
+        if (current_id[Class] == Loc) {
+            printf("%d: duplicate parameter declaration\n", line);
+            exit(-1);
+        }
+        match(Id);
+        //②
+        // store the local variable
+        current_id[BClass] = current_id[Class]; current_id[Class]  = Loc;
+        current_id[BType]  = current_id[Type];  current_id[Type]   = type;
+        current_id[BValue] = current_id[Value]; current_id[Value]  = params++;   // index of current parameter
+        if (token == ',') {
+            match(',');
+        }
+    }
+    // ③
+    index_of_bp = params+1;
+}
+```
+
+##### function_body()
+
+```C
+void function_body() {
+    // type func_name (...) {...}
+    //                   -->|   |<--
+    // ... {
+    // 1. local declarations
+    // 2. statements
+    // }
+    int pos_local; // position of local variables on the stack.
+    int type;
+    pos_local = index_of_bp;
+    // ①
+    while (token == Int || token == Char) {
+        // local variable declaration, just like global ones.
+        basetype = (token == Int) ? INT : CHAR;
+        match(token);
+        while (token != ';') {
+            type = basetype;
+            while (token == Mul) {
+                match(Mul);
+                type = type + PTR;
+            }
+            if (token != Id) {
+                // invalid declaration
+                printf("%d: bad local declaration\n", line);
+                exit(-1);
+            }
+            if (current_id[Class] == Loc) {
+                // identifier exists
+                printf("%d: duplicate local declaration\n", line);
+                exit(-1);
+            }
+            match(Id);
+            // store the local variable
+            current_id[BClass] = current_id[Class]; current_id[Class]  = Loc;
+            current_id[BType]  = current_id[Type];  current_id[Type]   = type;
+            current_id[BValue] = current_id[Value]; current_id[Value]  = ++pos_local;   // index of current parameter
+            if (token == ',') {
+                match(',');
+            }
+        }
+        match(';');
+    }
+    // ②
+    // save the stack size for local variables
+    *++text = ENT;
+    *++text = pos_local - index_of_bp;
+    // statements
+    while (token != '}') {
+        statement();
+    }
+    // emit code for leaving the sub function
+    *++text = LEV;
+}
+```
+
+编译`gcc compiler6.c`，由于我们还没有实现`statement()`函数，程序暂时无法测试。
+
+>
+
+#### 解析语句的定义
+
+C语言区分“语句”（statement）和“表达式”（expression）两个概念。简单地说，可以认为语句就是表达式加上末尾的分号。
+
+在我们的编译器中共识别 6 种语句：
+
+- if (...) <statement> [else <statement>]
+- while (...) <statement>
+- { <statement> }
+- return xxx;
+- <empty statement>;
+- expression; (expression end with semicolon)
+
+##### `IF`语句的解析
+
+翻译成汇编，伪代码：
+```
+if (...) <statement> [else <statement>]
+  if (<cond>)                   <cond>
+                                JZ a
+    <true_statement>   ===>     <true_statement>
+  else:                         JMP b
+a:                           a:
+    <false_statement>           <false_statement>
+b:
+```
+
+对应的解析逻辑：
+```C
+if (token == If) {
+    match(If);
+    match('(');
+    expression(Assign);  // parse condition
+    match(')');
+    *++text = JZ;
+    b = ++text;
+    statement();         // parse statement
+    if (token == Else) { // parse else
+        match(Else);
+        // emit code for JMP B
+        *b = (int)(text + 3);
+        *++text = JMP;
+        b = ++text;
+        statement();
+    }
+    *b = (int)(text + 1);
+}
+```
+
+##### `while`语句的解析
+
+```C
+if (token == While) {
+    match(While);
+    a = text + 1;
+    match('(');
+    expression(Assign);
+    match(')');
+    *++text = JZ;
+    b = ++text;
+    statement();
+    *++text = JMP;
+    *++text = (int)a;
+    *b = (int)(text + 1);
+}
+```
+
+##### `Return`语句的解析
+
+```C
+if (token == Return) {
+    // return [expression];
+    match(Return);
+    if (token != ';') {
+        expression(Assign);
+    }
+    match(';');
+    // emit code for return
+    *++text = LEV;
+}
+```
+
+##### 其它语句
+
+其它语句并不直接生成汇编代码，代码如下：
+
+```C
+if (token == '{') {
+    // { <statement> ... }
+    match('{');
+    while (token != '}') {
+        statement();
+    }
+    match('}');
+}
+else if (token == ';') {
+    // empty statement
+    match(';');
+}
+else {
+    // a = b; or function_call();
+    expression(Assign);
+    match(';');
+}
+```
+
+##### expression()
+
+```C
+void expression(int level) {
+    // expressions have various format.
+    // but majorly can be divided into two parts: unit and operator
+    // for example `(char) *a[10] = (int *) func(b > 0 ? 10 : 20);
+    // `a[10]` is an unit while `*` is an operator.
+    // `func(...)` in total is an unit.
+    // so we should first parse those unit and unary operators
+    // and then the binary ones
+    //
+    // also the expression can be in the following types:
+    //
+    // 1. unit_unary ::= unit | unit unary_op | unary_op unit
+    // 2. expr ::= unit_unary (bin_op unit_unary ...)
+
+    // unit_unary()
+    int *id;
+    int tmp;
+    int *addr;
+    {
+        if (!token) {
+            printf("%d: unexpected token EOF of expression\n", line);
+            exit(-1);
+        }
+        if (token == Num) {
+            match(Num);
+
+            // emit code
+            *++text = IMM;
+            *++text = token_val;
+            expr_type = INT;
+        }
+        else if (token == '"') {
+            // continous string "abc" "abc"
+
+
+            // emit code
+            *++text = IMM;
+            *++text = token_val;
+
+            match('"');
+            // store the rest strings
+            while (token == '"') {
+                match('"');
+            }
+
+            // append the end of string character '\0', all the data are default
+            // to 0, so just move data one position forward.
+            data = (char *)(((int)data + sizeof(int)) & (-sizeof(int)));
+            expr_type = PTR;
+        }
+        else if (token == Sizeof) {
+            // sizeof is actually an unary operator
+            // now only `sizeof(int)`, `sizeof(char)` and `sizeof(*...)` are
+            // supported.
+            match(Sizeof);
+            match('(');
+            expr_type = INT;
+
+            if (token == Int) {
+                match(Int);
+            } else if (token == Char) {
+                match(Char);
+                expr_type = CHAR;
+            }
+
+            while (token == Mul) {
+                match(Mul);
+                expr_type = expr_type + PTR;
+            }
+
+            match(')');
+
+            // emit code
+            *++text = IMM;
+            *++text = (expr_type == CHAR) ? sizeof(char) : sizeof(int);
+
+            expr_type = INT;
+        }
+        else if (token == Id) {
+            // there are several type when occurs to Id
+            // but this is unit, so it can only be
+            // 1. function call
+            // 2. Enum variable
+            // 3. global/local variable
+            match(Id);
+
+            id = current_id;
+
+            if (token == '(') {
+                // function call
+                match('(');
+
+                // pass in arguments
+                tmp = 0; // number of arguments
+                while (token != ')') {
+                    expression(Assign);
+                    *++text = PUSH;
+                    tmp ++;
+
+                    if (token == ',') {
+                        match(',');
+                    }
+
+                }
+                match(')');
+
+                // emit code
+                if (id[Class] == Sys) {
+                    // system functions
+                    *++text = id[Value];
+                }
+                else if (id[Class] == Fun) {
+                    // function call
+                    *++text = CALL;
+                    *++text = id[Value];
+                }
+                else {
+                    printf("%d: bad function call\n", line);
+                    exit(-1);
+                }
+
+                // clean the stack for arguments
+                if (tmp > 0) {
+                    *++text = ADJ;
+                    *++text = tmp;
+                }
+                expr_type = id[Type];
+            }
+            else if (id[Class] == Num) {
+                // enum variable
+                *++text = IMM;
+                *++text = id[Value];
+                expr_type = INT;
+            }
+            else {
+                // variable
+                if (id[Class] == Loc) {
+                    *++text = LEA;
+                    *++text = index_of_bp - id[Value];
+                }
+                else if (id[Class] == Glo) {
+                    *++text = IMM;
+                    *++text = id[Value];
+                }
+                else {
+                    printf("%d: undefined variable\n", line);
+                    exit(-1);
+                }
+
+                // emit code, default behaviour is to load the value of the
+                // address which is stored in `ax`
+                expr_type = id[Type];
+                *++text = (expr_type == Char) ? LC : LI;
+            }
+        }
+        else if (token == '(') {
+            // cast or parenthesis
+            match('(');
+            if (token == Int || token == Char) {
+                tmp = (token == Char) ? CHAR : INT; // cast type
+                match(token);
+                while (token == Mul) {
+                    match(Mul);
+                    tmp = tmp + PTR;
+                }
+
+                match(')');
+
+                expression(Inc); // cast has precedence as Inc(++)
+
+                expr_type  = tmp;
+            } else {
+                // normal parenthesis
+                expression(Assign);
+                match(')');
+            }
+        }
+        else if (token == Mul) {
+            // dereference *<addr>
+            match(Mul);
+            expression(Inc); // dereference has the same precedence as Inc(++)
+
+            if (expr_type >= PTR) {
+                expr_type = expr_type - PTR;
+            } else {
+                printf("%d: bad dereference\n", line);
+                exit(-1);
+            }
+
+            *++text = (expr_type == CHAR) ? LC : LI;
+        }
+        else if (token == And) {
+            // get the address of
+            match(And);
+            expression(Inc); // get the address of
+            if (*text == LC || *text == LI) {
+                text --;
+            } else {
+                printf("%d: bad address of\n", line);
+                exit(-1);
+            }
+
+            expr_type = expr_type + PTR;
+        }
+        else if (token == '!') {
+            // not
+            match('!');
+            expression(Inc);
+
+            // emit code, use <expr> == 0
+            *++text = PUSH;
+            *++text = IMM;
+            *++text = 0;
+            *++text = EQ;
+
+            expr_type = INT;
+        }
+        else if (token == '~') {
+            // bitwise not
+            match('~');
+            expression(Inc);
+
+            // emit code, use <expr> XOR -1
+            *++text = PUSH;
+            *++text = IMM;
+            *++text = -1;
+            *++text = XOR;
+
+            expr_type = INT;
+        }
+        else if (token == Add) {
+            // +var, do nothing
+            match(Add);
+            expression(Inc);
+
+            expr_type = INT;
+        }
+        else if (token == Sub) {
+            // -var
+            match(Sub);
+
+            if (token == Num) {
+                *++text = IMM;
+                *++text = -token_val;
+                match(Num);
+            } else {
+
+                *++text = IMM;
+                *++text = -1;
+                *++text = PUSH;
+                expression(Inc);
+                *++text = MUL;
+            }
+
+            expr_type = INT;
+        }
+        else if (token == Inc || token == Dec) {
+            tmp = token;
+            match(token);
+            expression(Inc);
+            if (*text == LC) {
+                *text = PUSH;  // to duplicate the address
+                *++text = LC;
+            } else if (*text == LI) {
+                *text = PUSH;
+                *++text = LI;
+            } else {
+                printf("%d: bad lvalue of pre-increment\n", line);
+                exit(-1);
+            }
+            *++text = PUSH;
+            *++text = IMM;
+            *++text = (expr_type > PTR) ? sizeof(int) : sizeof(char);
+            *++text = (tmp == Inc) ? ADD : SUB;
+            *++text = (expr_type == CHAR) ? SC : SI;
+        }
+        else {
+            printf("%d: bad expression\n", line);
+            exit(-1);
+        }
+    }
+
+    // binary operator and postfix operators.
+    {
+        while (token >= level) {
+            // handle according to current operator's precedence
+            tmp = expr_type;
+            if (token == Assign) {
+                // var = expr;
+                match(Assign);
+                if (*text == LC || *text == LI) {
+                    *text = PUSH; // save the lvalue's pointer
+                } else {
+                    printf("%d: bad lvalue in assignment\n", line);
+                    exit(-1);
+                }
+                expression(Assign);
+
+                expr_type = tmp;
+                *++text = (expr_type == CHAR) ? SC : SI;
+            }
+            else if (token == Cond) {
+                // expr ? a : b;
+                match(Cond);
+                *++text = JZ;
+                addr = ++text;
+                expression(Assign);
+                if (token == ':') {
+                    match(':');
+                } else {
+                    printf("%d: missing colon in conditional\n", line);
+                    exit(-1);
+                }
+                *addr = (int)(text + 3);
+                *++text = JMP;
+                addr = ++text;
+                expression(Cond);
+                *addr = (int)(text + 1);
+            }
+            else if (token == Lor) {
+                // logic or
+                match(Lor);
+                *++text = JNZ;
+                addr = ++text;
+                expression(Lan);
+                *addr = (int)(text + 1);
+                expr_type = INT;
+            }
+            else if (token == Lan) {
+                // logic and
+                match(Lan);
+                *++text = JZ;
+                addr = ++text;
+                expression(Or);
+                *addr = (int)(text + 1);
+                expr_type = INT;
+            }
+            else if (token == Or) {
+                // bitwise or
+                match(Or);
+                *++text = PUSH;
+                expression(Xor);
+                *++text = OR;
+                expr_type = INT;
+            }
+            else if (token == Xor) {
+                // bitwise xor
+                match(Xor);
+                *++text = PUSH;
+                expression(And);
+                *++text = XOR;
+                expr_type = INT;
+            }
+            else if (token == And) {
+                // bitwise and
+                match(And);
+                *++text = PUSH;
+                expression(Eq);
+                *++text = AND;
+                expr_type = INT;
+            }
+            else if (token == Eq) {
+                // equal ==
+                match(Eq);
+                *++text = PUSH;
+                expression(Ne);
+                *++text = EQ;
+                expr_type = INT;
+            }
+            else if (token == Ne) {
+                // not equal !=
+                match(Ne);
+                *++text = PUSH;
+                expression(Lt);
+                *++text = NE;
+                expr_type = INT;
+            }
+            else if (token == Lt) {
+                // less than
+                match(Lt);
+                *++text = PUSH;
+                expression(Shl);
+                *++text = LT;
+                expr_type = INT;
+            }
+            else if (token == Gt) {
+                // greater than
+                match(Gt);
+                *++text = PUSH;
+                expression(Shl);
+                *++text = GT;
+                expr_type = INT;
+            }
+            else if (token == Le) {
+                // less than or equal to
+                match(Le);
+                *++text = PUSH;
+                expression(Shl);
+                *++text = LE;
+                expr_type = INT;
+            }
+            else if (token == Ge) {
+                // greater than or equal to
+                match(Ge);
+                *++text = PUSH;
+                expression(Shl);
+                *++text = GE;
+                expr_type = INT;
+            }
+            else if (token == Shl) {
+                // shift left
+                match(Shl);
+                *++text = PUSH;
+                expression(Add);
+                *++text = SHL;
+                expr_type = INT;
+            }
+            else if (token == Shr) {
+                // shift right
+                match(Shr);
+                *++text = PUSH;
+                expression(Add);
+                *++text = SHR;
+                expr_type = INT;
+            }
+            else if (token == Add) {
+                // add
+                match(Add);
+                *++text = PUSH;
+                expression(Mul);
+
+                expr_type = tmp;
+                if (expr_type > PTR) {
+                    // pointer type, and not `char *`
+                    *++text = PUSH;
+                    *++text = IMM;
+                    *++text = sizeof(int);
+                    *++text = MUL;
+                }
+                *++text = ADD;
+            }
+            else if (token == Sub) {
+                // sub
+                match(Sub);
+                *++text = PUSH;
+                expression(Mul);
+                if (tmp > PTR && tmp == expr_type) {
+                    // pointer subtraction
+                    *++text = SUB;
+                    *++text = PUSH;
+                    *++text = IMM;
+                    *++text = sizeof(int);
+                    *++text = DIV;
+                    expr_type = INT;
+                } else if (tmp > PTR) {
+                    // pointer movement
+                    *++text = PUSH;
+                    *++text = IMM;
+                    *++text = sizeof(int);
+                    *++text = MUL;
+                    *++text = SUB;
+                    expr_type = tmp;
+                } else {
+                    // numeral subtraction
+                    *++text = SUB;
+                    expr_type = tmp;
+                }
+            }
+            else if (token == Mul) {
+                // multiply
+                match(Mul);
+                *++text = PUSH;
+                expression(Inc);
+                *++text = MUL;
+                expr_type = tmp;
+            }
+            else if (token == Div) {
+                // divide
+                match(Div);
+                *++text = PUSH;
+                expression(Inc);
+                *++text = DIV;
+                expr_type = tmp;
+            }
+            else if (token == Mod) {
+                // Modulo
+                match(Mod);
+                *++text = PUSH;
+                expression(Inc);
+                *++text = MOD;
+                expr_type = tmp;
+            }
+            else if (token == Inc || token == Dec) {
+                // postfix inc(++) and dec(--)
+                // we will increase the value to the variable and decrease it
+                // on `ax` to get its original value.
+                if (*text == LI) {
+                    *text = PUSH;
+                    *++text = LI;
+                }
+                else if (*text == LC) {
+                    *text = PUSH;
+                    *++text = LC;
+                }
+                else {
+                    printf("%d: bad value in increment\n", line);
+                    exit(-1);
+                }
+
+                *++text = PUSH;
+                *++text = IMM;
+                *++text = (expr_type > PTR) ? sizeof(int) : sizeof(char);
+                *++text = (token == Inc) ? ADD : SUB;
+                *++text = (expr_type == CHAR) ? SC : SI;
+                *++text = PUSH;
+                *++text = IMM;
+                *++text = (expr_type > PTR) ? sizeof(int) : sizeof(char);
+                *++text = (token == Inc) ? SUB : ADD;
+                match(token);
+            }
+            else if (token == Brak) {
+                // array access var[xx]
+                match(Brak);
+                *++text = PUSH;
+                expression(Assign);
+                match(']');
+
+                if (tmp > PTR) {
+                    // pointer, `not char *`
+                    *++text = PUSH;
+                    *++text = IMM;
+                    *++text = sizeof(int);
+                    *++text = MUL;
+                }
+                else if (tmp < PTR) {
+                    printf("%d: pointer type expected\n", line);
+                    exit(-1);
+                }
+                expr_type = tmp - PTR;
+                *++text = ADD;
+                *++text = (expr_type == CHAR) ? LC : LI;
+            }
+            else {
+                printf("%d: compiler error, token = %d\n", line, token);
+                exit(-1);
+            }
+        }
+    }
+}
+```
+
+##### 更新`main()`函数
+
+```C
+int main(int argc, char **argv)
+{
+    ...
+
+    program(); // 词法分析、语法分析、生成汇编指令放到text段
+
+    if (!(pc = (int *)idmain[Value])) {
+        printf("main() not defined\n");
+        return -1;
+    }
+
+    // setup stack
+    sp = (int *)((int)stack + poolsize);
+    *--sp = EXIT; // call exit if main returns
+    *--sp = PUSH; tmp = sp;
+    *--sp = argc;
+    *--sp = (int)argv;
+    *--sp = (int)tmp;
+
+    return eval(); // 启动虚拟机，执行汇编指令
+}
+
+```
+
+编译`gcc -o compiler compiler.c`，
+- 运行`compiler printf.c`，输出：
+
+> “Hello, my compiler.”
+
+- 运行`compiler ifStatement.c`，输出：
+
+>
+
+- 运行`compiler whileStatement.c`，输出：
+
+>
+
+- 运行`compiler functionCall.c`，输出：
+
+>
+
+- 运行`compiler recursiveCall.c`，输出：
+
+>
+
+- 运行`compiler compiler.c`，输出：
+
+>
+
+Congratulations!~~~ 我们想要的编译器大功告成！！！
+
 ###### 联系方式
 * 邮箱：victorypiter@msn.com（欢迎大家发邮件跟我交流）
 * QQ群：399128966
