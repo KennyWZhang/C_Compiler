@@ -5,14 +5,13 @@
 
 int token;                    // current token
 int token_val;                // value of current token (mainly for number)
-char *src, *old_src;          // pointer to source code string;
+char *src;          // pointer to source code string;
 int poolsize;                 // default size of text/data/stack
 int line;                     // line number
 int *text,                    // text segment
-    *old_text,                // for dump text segment
     *stack;                   // stack
 char *data;                   // data segment
-int *pc, *bp, *sp, ax, cycle; // virtual machine registers
+int *pc, *bp, *sp, ax;        // virtual machine registers
 int *current_id,              // current parsed ID
     *symbols;                 // symbol table
 int *idmain;                  // the `main` function
@@ -1264,7 +1263,7 @@ int main(int argc, char **argv)
     }
 
     // allocate memory for virtual machine
-    if (!(text = old_text = malloc(poolsize))) {
+    if (!(text = malloc(poolsize))) {
         printf("could not malloc(%d) for text area\n", poolsize);
         return -1;
     }
