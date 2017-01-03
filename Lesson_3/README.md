@@ -1,10 +1,10 @@
-# 从0到100开发一个C语言编译器（2）- 学习Jack Crenshaw的Let's Build a Compiler
+# 从0到100开发一个C语言编译器（3）- 学习Jack Crenshaw的Let's Build a Compiler
 
 ###### 作者简介
 
 KennyWZhang，前阿里P6工程师、腾讯T3技术专家（自封的，^_^），编译器开发爱好者（真的，哈哈哈）。
 
-正文
+Let's Build a Compiler ([网站](http://www.compilers.iecc.com/crenshaw/) or [在线pdf文档](http://www.stack.nl/~marcov/compiler.pdf))
 
 ###### 联系方式
 
