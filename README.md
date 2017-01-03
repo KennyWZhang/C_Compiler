@@ -17,11 +17,11 @@ KennyWZhang，前阿里P6工程师、腾讯T3技术专家（自封的，^_^）�
 
 ### 目录
 
-* Lesson 0: [从0到100开发一个C语言编译器（0）- 编译器概述](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson%200)
-* Lesson 1: [从0到100开发一个C语言编译器（1）- 学习lotabout的系列文章](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson%201)
-* Lesson 2: [从0到100开发一个C语言编译器（2）- 解读C4源代码](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson%202)
-* Lesson 3: [从0到100开发一个C语言编译器（3）- 学习Jack Crenshaw的Let's Build a Compiler](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson%203)
-* Lesson 4: [从0到100开发一个C语言编译器（4）- 解读UCC/TCC](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson%204)
+* Lesson 0: [从0到100开发一个C语言编译器（0）- 编译器概述](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson_0)
+* Lesson 1: [从0到100开发一个C语言编译器（1）- 学习lotabout的系列文章](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson_1)
+* Lesson 2: [从0到100开发一个C语言编译器（2）- 解读C4源代码](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson_2)
+* Lesson 3: [从0到100开发一个C语言编译器（3）- 学习Jack Crenshaw的Let's Build a Compiler](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson_3)
+* Lesson 4: [从0到100开发一个C语言编译器（4）- 解读UCC/TCC](https://github.com/KennyWZhang/C_Compiler/tree/master/Lesson_4)
 
 ### 展望
 
