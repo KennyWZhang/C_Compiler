@@ -1,23 +1,26 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <memory.h>
-#include <string.h>
+#include <fcntl.h> // for open()
+#include <unistd.h> // for read() and close()
+#include <stdlib.h> // for malloc()
 
-int token;                    // current token
+int token; // current token
 int token_val;                // value of current token (mainly for number)
-char *src;                    // pointer to source code string;
-int poolsize;                 // default size of text/data/stack
+
+char *src; // pointer to source code string
+
+int poolsize; // the size of source area
 
 // tokens and classes (operators last and in precedence order)
 enum {
   Num = 128, Fun, Sys, Glo, Loc, Id,
   Char, Else, Enum, If, Int, Return, Sizeof, While,
-  Assign, Cond, Lor, Lan, Or, Xor, And, Eq, Ne, Lt, Gt, Le, Ge, Shl, Shr, Add, Sub, Mul, Div, Mod, Inc, Dec, Brak
+  Assign, Cond, Lor, Lan, Or, Xor, And, Eq, Ne, Lt, Gt, Le, Ge,
+  Shl, Shr, Add, Sub, Mul, Div, Mod, Inc, Dec, Brak
 };
 
 void next() {
-    while (token = *src) {
-        ++src;
+    while ((token = *src) > 0) {
+        src++;
 
         // parse token here
         if (token == ' ') {
@@ -26,14 +29,15 @@ void next() {
             token_val = token - '0';
             // if (token_val > 0) {
                 while (*src >= '0' && *src <= '9') {
-                    token_val = token_val*10 + (*src++ - '0');
+                    token_val = token_val * 10 + (*src - '0');
+                    src++;
                 }
             // }
 
             token = Num;
             return;
         } else if (token == '+') {
-            // only parse '+', ignore '++'
+            // now we only parse '+' and ignore '++'
             token = Add;
             return;
         }
@@ -42,45 +46,43 @@ void next() {
 }
 
 void program() {
-    next(); // get next token
+    next(); // parse out one token and store its type into variable token
     while (token > 0) {
         printf("token is: %d\n", token);
-        next();
+        next(); // get next token
     }
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char *argv[]) {
 
-    int i, fd;
+  argv++;
 
-    argv++;
+  poolsize = 256 * 1024; // assume the default size of source area is 256K
 
-    poolsize = 256 * 1024; // arbitrary size
+  // open the source file and store the file descriptor into variable fd
+  int fd;
+  if ((fd = open(*argv, 0)) < 0) {
+    printf("could not open source file: %s\n", *argv);
+    return -1;
+  }
 
-    if ((fd = open(*argv, 0)) < 0) {
-        printf("could not open(%s)\n", *argv);
-        return -1;
-    }
+  // allocate memory for source area
+  if (!(src = malloc(poolsize))) {
+    printf("could not malloc memory (%d bytes) for source area\n", poolsize);
+    return -1;
+  }
 
-    // read the source file
-    if ((fd = open(*argv, 0)) < 0) {
-        printf("could not open(%s)\n", *argv);
-        return -1;
-    }
+  // read the source file to source area
+  // the last byte is reserved for EOF flag
+  int i;
+  if ((i = read(fd, src, poolsize-1)) <= 0) {
+    printf("could not read data from file: read() returned %d\n", i);
+    return -1;
+  }
 
-    if (!(src = malloc(poolsize))) {
-        printf("could not malloc(%d) for source area\n", poolsize);
-        return -1;
-    }
-    // read the source file
-    if ((i = read(fd, src, poolsize-1)) <= 0) {
-        printf("read() returned %d\n", i);
-        return -1;
-    }
-    src[i] = 0; // add EOF character
-    close(fd);
+  close(fd); // close file
 
-    program();
+  src[i] = -1; // add EOF flag
 
-    return 0;
+  program(); // start paring
 }

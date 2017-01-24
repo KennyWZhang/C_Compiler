@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
 
   poolsize = 256 * 1024; // assume the default size of source area is 256K
 
-  // open the source file and store the file descriptor to variable fd
+  // open the source file and store the file descriptor into variable fd
   int fd;
   if ((fd = open(*argv, 0)) < 0) {
     printf("could not open source file: %s\n", *argv);
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
   }
 
   // read the source file to source area
-  // the last byte is reserved for EOF
+  // the last byte is reserved for EOF flag
   int i;
   if ((i = read(fd, src, poolsize-1)) <= 0) {
     printf("could not read data from file: read() returned %d\n", i);
@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
 
   close(fd); // close file
 
-  src[i] = -1; // add EOF character
+  src[i] = -1; // add EOF flag
 
-  program();
+  program(); // start paring
 }
